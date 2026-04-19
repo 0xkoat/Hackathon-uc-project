@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-chatbot_core.py
----------------
-Pure logic module — no UI, no loops.
-Imported by both the Jupyter notebook and the Flask web server.
+chatbot_core.py  — FIXED v4 (FINAL)
+-------------------------------------
+Root cause of all failures:
+  - hf-inference provider no longer supports big LLMs (Mistral, Zephyr, etc.)
+  - Raw HTTP calls to old/new URLs all fail for chat models
+
+Solution:
+  - Use huggingface_hub InferenceClient which auto-routes to the correct provider
+  - Use novita provider (free, no login required, supports many models)
+  - Fallback chain across multiple providers and models
 """
 
 import os
@@ -12,13 +18,11 @@ import unicodedata
 import warnings
 import pandas as pd
 import pdfplumber
-import torch
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from transformers import T5ForConditionalGeneration, T5Tokenizer
 from huggingface_hub import InferenceClient
 
 warnings.filterwarnings("ignore")
@@ -27,29 +31,36 @@ warnings.filterwarnings("ignore")
 # CONFIGURATION
 # =============================================================================
 
-LAWS_FOLDER     = "./laws/"
-CHROMA_DB_PATH  = "./chroma_db/"
-CONTACTS_CSV    = "./law_contacts.csv"
-EMBED_MODEL     = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-PRIMARY_MODEL   = "google/flan-t5-xl"
-HF_API_KEY      = "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"
-FALLBACK_MODEL  = "mistralai/Mistral-7B-Instruct-v0.2"
-TOP_K_CHUNKS    = 5
-MIN_RELEVANCE   = 0.45
+LAWS_FOLDER    = "./laws/"
+CHROMA_DB_PATH = "./chroma_db/"
+CONTACTS_CSV   = "./law_contacts.csv"
+EMBED_MODEL    = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+HF_API_KEY = "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"
+
+# Each entry is (provider, model)
+# novita and featherless-ai are free and don't require model-specific agreements
+LLM_OPTIONS = [
+    ("novita",          "meta-llama/llama-3.1-8b-instruct"),
+    ("novita",          "mistralai/mistral-7b-instruct-v0.3"),
+    ("featherless-ai",  "mistralai/Mistral-7B-Instruct-v0.3"),
+    ("featherless-ai",  "meta-llama/Meta-Llama-3.1-8B-Instruct"),
+    ("together",        "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"),
+    ("together",        "mistralai/Mistral-7B-Instruct-v0.3"),
+]
+
+TOP_K_CHUNKS  = 6
+MIN_RELEVANCE = 0.05
 
 os.makedirs(LAWS_FOLDER,    exist_ok=True)
 os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 
 # =============================================================================
-# GLOBALS (populated by init())
+# GLOBALS
 # =============================================================================
 
-embeddings             = None
-vectorstore            = None
-flan_model             = None
-flan_tokenizer         = None
-hf_client              = None
-PRIMARY_LLM_AVAILABLE  = False
+embeddings  = None
+vectorstore = None
 
 # =============================================================================
 # LANGUAGE DETECTION
@@ -90,18 +101,23 @@ def _extract_pdf(path: str) -> list:
 
 def ingest_pdfs():
     global vectorstore
+
     if os.path.exists(CHROMA_DB_PATH) and os.listdir(CHROMA_DB_PATH):
-        print("[DB] Loading existing ChromaDB index...")
+        print(f"[DB] Loading existing ChromaDB from {CHROMA_DB_PATH} ...")
         vectorstore = Chroma(
             persist_directory=CHROMA_DB_PATH,
             embedding_function=embeddings
         )
-        print(f"[DB] {vectorstore._collection.count()} chunks ready.")
+        try:
+            count = vectorstore._collection.count()
+            print(f"[DB] Loaded {count} chunks.")
+        except Exception:
+            print("[DB] Existing index loaded.")
         return
 
     pdfs = [f for f in os.listdir(LAWS_FOLDER) if f.endswith(".pdf")]
     if not pdfs:
-        print("[WARN] No PDFs found in ./laws/ — upload your law PDFs first.")
+        print("[WARN] No PDFs found in ./laws/")
         return
 
     print(f"[DB] Indexing {len(pdfs)} PDF(s)...")
@@ -116,22 +132,22 @@ def ingest_pdfs():
         separators=["\n\n", "\n", ".", "،", " "]
     )
     chunks = splitter.split_documents(all_docs)
-    print(f"[DB] Creating {len(chunks)} chunks...")
+    print(f"[DB] Storing {len(chunks)} chunks...")
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
         persist_directory=CHROMA_DB_PATH
     )
     vectorstore.persist()
-    print(f"[DB] Done. {len(chunks)} chunks stored.")
+    print(f"[DB] Done — {len(chunks)} chunks indexed.")
 
 # =============================================================================
-# LLM LOADERS
+# STARTUP
 # =============================================================================
 
 def _load_embeddings():
     global embeddings
-    print("[EMB] Loading multilingual embedding model...")
+    print("[EMB] Loading embedding model...")
     embeddings = HuggingFaceEmbeddings(
         model_name=EMBED_MODEL,
         model_kwargs={"device": "cpu"},
@@ -140,55 +156,26 @@ def _load_embeddings():
     print("[EMB] Ready.")
 
 
-def _load_flan():
-    global flan_model, flan_tokenizer, PRIMARY_LLM_AVAILABLE
-    try:
-        print(f"[LLM] Loading {PRIMARY_MODEL} (may take a few minutes)...")
-        flan_tokenizer = T5Tokenizer.from_pretrained(PRIMARY_MODEL)
-        flan_model     = T5ForConditionalGeneration.from_pretrained(
-            PRIMARY_MODEL, torch_dtype=torch.float32, low_cpu_mem_usage=True
-        )
-        flan_model.eval()
-        PRIMARY_LLM_AVAILABLE = True
-        print(f"[LLM] {PRIMARY_MODEL} ready.")
-    except Exception as e:
-        print(f"[LLM] Could not load flan-t5-xl: {e}")
-        print("[LLM] Will use HuggingFace API fallback.")
-        PRIMARY_LLM_AVAILABLE = False
-
-
-def _load_fallback():
-    global hf_client
-    try:
-        hf_client = InferenceClient(model=FALLBACK_MODEL, token=HF_API_KEY)
-        print("[LLM] HuggingFace fallback client ready.")
-    except Exception as e:
-        print(f"[LLM] Fallback client error: {e}")
-
-
 def init():
-    """Call once at startup to load all models and index PDFs."""
     _load_embeddings()
     ingest_pdfs()
-    _load_flan()
-    _load_fallback()
     _ensure_contacts_csv()
-    print("\n✅ Chatbot fully initialized and ready.")
+    print("\n✅ Chatbot fully initialized and ready.\n")
 
 # =============================================================================
-# CONTACTS CSV
+# CONTACTS
 # =============================================================================
 
 def _ensure_contacts_csv():
     if not os.path.exists(CONTACTS_CSV):
         pd.DataFrame([
-            {"name": "محمد بن علي",           "specialization": "قانون الشغل عقود عمل",         "phone": "+216 20 000 001", "email": "m.benali@avocat.tn",    "city": "تونس",    "languages": "ar,fr"},
-            {"name": "Sonia Trabelsi",         "specialization": "droit commercial sociétés",      "phone": "+216 20 000 002", "email": "s.trabelsi@avocat.tn",  "city": "Sfax",    "languages": "fr,ar"},
-            {"name": "Karim Gharbi",           "specialization": "droit de la famille divorce",    "phone": "+216 20 000 003", "email": "k.gharbi@avocat.tn",    "city": "Sousse",  "languages": "fr"},
-            {"name": "فاطمة الزهراء المنصوري", "specialization": "قانون الأسرة إرث طلاق",         "phone": "+216 20 000 004", "email": "f.mansouri@avocat.tn",  "city": "صفاقس",   "languages": "ar"},
-            {"name": "Amine Chaabane",         "specialization": "droit pénal criminel infractions","phone": "+216 20 000 005", "email": "a.chaabane@avocat.tn",  "city": "Tunis",   "languages": "fr,ar"},
+            {"name": "محمد بن علي",            "specialization": "قانون الشغل عقود عمل",           "phone": "+216 20 000 001", "email": "m.benali@avocat.tn",    "city": "تونس",   "languages": "ar,fr"},
+            {"name": "Sonia Trabelsi",          "specialization": "droit commercial sociétés",        "phone": "+216 20 000 002", "email": "s.trabelsi@avocat.tn",  "city": "Sfax",   "languages": "fr,ar"},
+            {"name": "Karim Gharbi",            "specialization": "droit de la famille divorce",      "phone": "+216 20 000 003", "email": "k.gharbi@avocat.tn",    "city": "Sousse", "languages": "fr"},
+            {"name": "فاطمة الزهراء المنصوري",  "specialization": "قانون الأسرة إرث طلاق",           "phone": "+216 20 000 004", "email": "f.mansouri@avocat.tn",  "city": "صفاقس",  "languages": "ar"},
+            {"name": "Amine Chaabane",          "specialization": "droit pénal criminel infractions", "phone": "+216 20 000 005", "email": "a.chaabane@avocat.tn",  "city": "Tunis",  "languages": "fr,ar"},
         ]).to_csv(CONTACTS_CSV, index=False, encoding="utf-8-sig")
-        print("[CSV] Sample contacts CSV created.")
+        print("[CSV] Contacts file created.")
 
 
 def _find_contacts(question: str, lang: str) -> str:
@@ -220,115 +207,136 @@ def _find_contacts(question: str, lang: str) -> str:
     if lang == "ar":
         return "لم نجد إجابة في النصوص القانونية.\nإليك متخصصون يمكنهم مساعدتك:\n\n" + contacts
     if lang == "fr":
-        return "Réponse introuvable dans les textes.\nVoici des professionnels qui peuvent vous aider :\n\n" + contacts
-    return (
-        "لم نجد إجابة في النصوص القانونية.\nإليك متخصصون يمكنهم مساعدتك:\n\n" + contacts +
-        "\n\n---\n\nRéponse introuvable dans les textes.\nVoici des professionnels qui peuvent vous aider :\n\n" + contacts
-    )
+        return "Réponse introuvable dans les textes juridiques.\nVoici des professionnels qui peuvent vous aider :\n\n" + contacts
+    return "لم نجد إجابة.\n\n" + contacts
 
 # =============================================================================
-# PROMPT BUILDER
+# PROMPT MESSAGES
 # =============================================================================
 
-def _build_prompt(question: str, context: str, lang: str) -> str:
+def _build_messages(question: str, context: str, lang: str) -> list:
     if lang == "ar":
-        return (
-            "أنت مساعد قانوني تونسي. أجب بالعربية التونسية فقط.\n"
-            "استخدم فقط النصوص أدناه. لا معرفة خارجية.\n"
-            "إذا لم تجد الإجابة اكتب فقط: ANSWER_NOT_FOUND\n"
-            "اذكر المصدر دائماً: [اسم_الملف.pdf، صفحة X]\n\n"
-            f"النصوص:\n{context}\n\nالسؤال: {question}\n\nالإجابة:"
+        system = (
+            "أنت مساعد قانوني تونسي متخصص. "
+            "أجب بالعربية فقط بناءً على النصوص القانونية التونسية المقدمة. "
+            "اذكر المصدر دائماً هكذا: [اسم_الملف.pdf، صفحة X]. "
+            "إذا لم تجد إجابة واضحة قل ذلك صراحةً."
         )
-    if lang == "fr":
-        return (
-            "Tu es un assistant juridique tunisien. Réponds UNIQUEMENT en français.\n"
-            "Utilise SEULEMENT les textes ci-dessous. Aucune connaissance externe.\n"
-            "Si introuvable, écris uniquement: ANSWER_NOT_FOUND\n"
-            "Cite toujours la source: [fichier.pdf, page X]\n\n"
-            f"Textes:\n{context}\n\nQuestion: {question}\n\nRéponse:"
+        user = (
+            f"النصوص القانونية:\n{context}\n\n"
+            f"السؤال: {question}\n\n"
+            "أجب الآن بالعربية مع ذكر المصدر:"
         )
-    return (
-        "You are a Tunisian legal assistant. User writes in Arabic and French.\n"
-        "Reply FIRST in Tunisian Arabic, then the SAME answer in French after '---'.\n"
-        "Use ONLY the texts below. No outside knowledge.\n"
-        "If not found, write only: ANSWER_NOT_FOUND\n"
-        "Always cite: [filename.pdf, page X]\n\n"
-        f"Texts:\n{context}\n\nQuestion: {question}\n\nAnswer:"
-    )
+    elif lang == "fr":
+        system = (
+            "Tu es un assistant juridique tunisien expert. "
+            "Réponds en français uniquement en te basant sur les textes juridiques fournis. "
+            "Cite toujours la source comme: [fichier.pdf, page X]. "
+            "Si la réponse n'est pas dans les textes, dis-le clairement."
+        )
+        user = (
+            f"Textes juridiques:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Réponds maintenant en français avec la source:"
+        )
+    else:
+        system = (
+            "You are a Tunisian legal assistant. "
+            "Answer only based on the provided legal texts. "
+            "Cite sources as [filename.pdf, page X]."
+        )
+        user = f"Legal texts:\n{context}\n\nQuestion: {question}\n\nAnswer with source:"
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user},
+    ]
 
 # =============================================================================
-# LLM CALLERS
+# LLM CALLER — InferenceClient with provider fallback chain
 # =============================================================================
 
-def _call_flan(prompt: str) -> str:
-    inputs  = flan_tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024)
-    outputs = flan_model.generate(
-        inputs["input_ids"],
-        max_new_tokens=512, do_sample=True,
-        top_p=0.92, temperature=0.3, no_repeat_ngram_size=3
-    )
-    return flan_tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
-
-
-def _call_fallback(prompt: str) -> str:
-    if hf_client is None:
-        return "ANSWER_NOT_FOUND"
-    try:
-        return hf_client.text_generation(
-            prompt, max_new_tokens=512, temperature=0.3, repetition_penalty=1.1
-        ).strip()
-    except Exception as e:
-        print(f"[LLM] Fallback error: {e}")
-        return "ANSWER_NOT_FOUND"
-
-
-def _call_llm(prompt: str) -> str:
-    if PRIMARY_LLM_AVAILABLE:
+def _call_llm(messages: list) -> str:
+    for provider, model in LLM_OPTIONS:
         try:
-            result = _call_flan(prompt)
-            if result:
-                return result
+            print(f"[LLM] Trying {provider} / {model} ...")
+            client = InferenceClient(
+                provider=provider,
+                api_key=HF_API_KEY,
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=500,
+                temperature=0.1,
+                stream=False,
+            )
+            text = response.choices[0].message.content.strip()
+            if text:
+                print(f"[LLM] ✅ Got answer from {provider}/{model}")
+                return text
         except Exception as e:
-            print(f"[LLM] flan-t5-xl failed ({e}), switching to fallback...")
-    return _call_fallback(prompt)
+            err = str(e)
+            print(f"[LLM] {provider}/{model} failed: {err[:120]}, trying next...")
+            continue
+
+    print("[LLM] All providers/models failed.")
+    return ""
 
 # =============================================================================
-# PUBLIC ask() FUNCTION
+# PUBLIC ask()
 # =============================================================================
 
-def ask(question: str) -> dict:
-    """
-    Main entry point. Returns a dict:
-      { "answer": str, "lang": str, "source": "llm" | "contacts" | "error" }
-    """
+def ask(question: str, pdf_filename: str = None) -> dict:
     if vectorstore is None:
-        return {"answer": "⚠️ No PDFs indexed. Please add PDFs to ./laws/ and restart.",
+        return {"answer": "⚠️ Aucun PDF indexé. Ajoutez vos PDFs dans ./laws/ et redémarrez.",
                 "lang": "fr", "source": "error"}
 
     lang = detect_language(question)
 
+    # Greeting shortcut
+    greeting_kw = ["hello", "hi", "مرحبا", "bonjour", "salut", "اهلا", "صباح", "مساء"]
+    if any(kw in question.lower() for kw in greeting_kw) and len(question.split()) <= 4:
+        if lang == "ar":
+            return {"answer": "مرحباً! أنا المساعد القانوني التونسي. اختر نوع العقد أولاً ثم اسأل سؤالك.", "lang": lang, "source": "greeting"}
+        return {"answer": "Bonjour ! Je suis l'assistant juridique tunisien. Choisissez d'abord le type de contrat.", "lang": lang, "source": "greeting"}
+
+    # Vector search
     try:
-        results = vectorstore.similarity_search_with_relevance_scores(question, k=TOP_K_CHUNKS)
+        all_results = vectorstore.similarity_search_with_relevance_scores(question, k=TOP_K_CHUNKS * 2)
+        print(f"[DEBUG] Total results: {len(all_results)}")
+
+        if pdf_filename:
+            results = [(d, s) for d, s in all_results if d.metadata.get("source") == pdf_filename]
+            print(f"[DEBUG] Filtered to {pdf_filename}: {len(results)} results")
+            if not results:
+                results = all_results[:TOP_K_CHUNKS]
+                print("[DEBUG] Falling back to global results")
+        else:
+            results = all_results[:TOP_K_CHUNKS]
+
     except Exception as e:
-        return {"answer": f"⚠️ Retrieval error: {e}", "lang": lang, "source": "error"}
+        return {"answer": f"⚠️ Erreur de recherche: {e}", "lang": lang, "source": "error"}
 
     if not results:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
 
-    best_score = max(score for _, score in results)
+    best_score = max(s for _, s in results)
+    print(f"[DEBUG] Best score: {best_score:.3f} (min: {MIN_RELEVANCE})")
 
     if best_score < MIN_RELEVANCE:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
 
+    # Build context
     context = "\n\n---\n\n".join(
         f"[{d.metadata.get('source','?')}, page {d.metadata.get('page','?')}]\n{d.page_content}"
-        for d, _ in results
+        for d, _ in results[:TOP_K_CHUNKS]
     )
 
-    prompt   = _build_prompt(question, context, lang)
-    response = _call_llm(prompt)
+    messages = _build_messages(question, context, lang)
+    response = _call_llm(messages)
 
-    if "ANSWER_NOT_FOUND" in response.upper():
+    if not response:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
 
     return {"answer": response, "lang": lang, "source": "llm"}

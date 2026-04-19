@@ -30,17 +30,18 @@ def index():
 def api_ask():
     data     = request.get_json()
     question = data.get("question", "").strip()
+    pdf_filename = data.get("pdf_filename", None)
 
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    result = ask(question)
+    result = ask(question, pdf_filename)
     return jsonify(result)
 
-# --- Health check ---
-@app.route("/api/health")
-def health():
-    return jsonify({"status": "ok"})
+# --- Serve PDFs ---
+@app.route("/laws/<path:filename>")
+def serve_pdf(filename):
+    return send_from_directory("laws", filename)
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=5000)

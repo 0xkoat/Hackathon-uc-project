@@ -312,6 +312,7 @@
             font-family: inherit;
             outline: none;
             background: white;
+            overflow-x: auto;
         }
         .chat-input:focus {
             border-color: #1a5276;
@@ -363,11 +364,46 @@
                 font-size: 1.3rem;
             }
         }
-        .hidden {
-            display: none;
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .option-btn {
+            background: #e1f0fa;
+            border: 1px solid #1a5276;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .option-btn:hover {
+            background: #c8e4f7;
+        }
+        .sub-options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .sub-option-btn {
+            background: #f0f8e1;
+            border: 1px solid #2c5f2d;
+            padding: 6px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .sub-option-btn:hover {
+            background: #e8f5d8;
         }
         .pointer {
             cursor: pointer;
+        }
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
@@ -417,11 +453,11 @@
             </div>
         </div>
 
-        <!-- Card 4 : عقد وكالة (formerly loan) -->
-        <div class="contract-card" data-contract-key="agency">
-            <div class="card-title" data-ar="عقد وكالة" data-fr="Contrat d'agence / mandat">عقد وكالة</div>
+        <!-- Card 4 : عقد قرض -->
+        <div class="contract-card" data-contract-key="loan">
+            <div class="card-title" data-ar="عقد قرض" data-fr="Contrat de prêt">عقد قرض</div>
             <div class="subfields-container">
-                <div class="no-sub" data-ar="(نموذج وكالة عامة)" data-fr="(modèle de mandat général)">(نموذج وكالة عامة)</div>
+                <div class="no-sub" data-ar="(نموذج قرض عام)" data-fr="(modèle de prêt général)">(نموذج قرض عام)</div>
             </div>
         </div>
     </div>
@@ -448,13 +484,20 @@
         </div>
     </div>
     <div class="chat-messages-area" id="chatMessagesArea">
-        <div class="message bot-msg" id="welcomeChatMsg">
-            <div class="bubble">✨ مرحباً! أنا المساعد القانوني التونسي. اسألني عن القوانين، العقود، أو انقر على أي عقد من القائمة لتحميل النموذج بصيغة PDF. ✨</div>
+        <div class="message bot-msg" id="initialOptionsMsg">
+            <div class="bubble">
+                <div id="initialOptions" class="options-container">
+                    <button class="option-btn" data-primary="sale" data-ar="عقد البيع" data-fr="Contrat de vente">عقد البيع</button>
+                    <button class="option-btn" data-primary="rent" data-ar="عقد كراء" data-fr="Contrat de location">عقد كراء</button>
+                    <button class="option-btn" data-primary="work" data-ar="عقد شغل" data-fr="Contrat de travail">عقد شغل</button>
+                    <button class="option-btn" data-primary="loan" data-ar="عقد قرض" data-fr="Contrat de prêt">عقد قرض</button>
+                </div>
+            </div>
         </div>
     </div>
     <div class="chat-input-area">
-        <input type="text" id="chatInput" class="chat-input" placeholder="اكتب سؤالك هنا...">
-        <button id="chatSendBtn" class="chat-send">إرسال</button>
+        <input type="text" id="chatInput" class="chat-input" placeholder="اكتب سؤالك هنا..." style="display: none;">
+        <button id="chatSendBtn" class="chat-send" style="display: none;">إرسال</button>
     </div>
 </div>
 
@@ -467,15 +510,17 @@
         const suffix = currentLanguage === "ar" ? "Arabe.pdf" : "Français.pdf";
         switch(category) {
             case "cars":        // سيارات
-            case "housing":     // محل معد للسكنى
-            case "agency":      // عقد وكالة
-                return `law/Coc${suffix}`;          // CocArabe.pdf / CocFrançais.pdf
+                return `/laws/Coc${suffix}`;
             case "realestate":  // عقارات و أراضي
-                return `law/Droit${suffix}`;        // DroitArabe.pdf / DroitFrançais.pdf
+                return `/laws/Droit${suffix}`;
+            case "housing":     // محل سكني
+                return `/laws/Coc${suffix}`;
             case "commercial":  // محل تجاري
-                return `law/Commerce${suffix}`;     // CommerceArabe.pdf / CommerceFrançais.pdf
+                return `/laws/Commerce${suffix}`;
             case "work":        // عقد شغل
-                return `law/travail${suffix}`;      // travailArabe.pdf / travailFrançais.pdf
+                return `/laws/travail${suffix}`;
+            case "loan":        // عقد قرض
+                return `/laws/Coc${suffix}`;
             default:
                 return null;
         }
@@ -505,8 +550,8 @@
         else if (contractKey === "work") {
             category = "work";
         }
-        else if (contractKey === "agency") {
-            category = "agency";
+        else if (contractKey === "loan") {
+            category = "loan";
         }
 
         if (category) {
@@ -576,14 +621,19 @@
         if (sendBtn) {
             sendBtn.innerText = lang === "ar" ? "إرسال" : "Envoyer";
         }
-        // update welcome message in chat if still default
-        const welcomeDiv = document.getElementById("welcomeChatMsg");
-        if (welcomeDiv && chatMessagesArea && chatMessagesArea.children.length === 1 && welcomeDiv) {
-            const bubbleDiv = welcomeDiv.querySelector(".bubble");
-            if (bubbleDiv) {
-                if (lang === "ar") bubbleDiv.innerText = "✨ مرحباً! أنا المساعد القانوني التونسي. اسألني عن القوانين، العقود، أو انقر على أي عقد من القائمة لتحميل النموذج بصيغة PDF. ✨";
-                else bubbleDiv.innerText = "✨ Bonjour ! Je suis l'assistant juridique tunisien. Posez-moi des questions ou cliquez sur un contrat pour télécharger le modèle PDF. ✨";
-            }
+        // update initial options if present
+        const initialOptions = document.getElementById("initialOptions");
+        if (initialOptions) {
+            document.querySelectorAll(".option-btn").forEach(btn => {
+                const arText = btn.getAttribute("data-ar");
+                const frText = btn.getAttribute("data-fr");
+                if (arText && frText) btn.innerText = lang === "ar" ? arText : frText;
+            });
+            document.querySelectorAll(".sub-option-btn").forEach(btn => {
+                const arSub = btn.getAttribute("data-ar");
+                const frSub = btn.getAttribute("data-fr");
+                if (arSub && frSub) btn.innerText = lang === "ar" ? arSub : frSub;
+            });
         }
         // copyright
         const copyrightDiv = document.getElementById("copyrightText");
@@ -599,6 +649,8 @@
 
     // ----- CHAT FUNCTIONALITY (same as before, connected to backend) -----
     let isChatOpen = false;
+    let selectedPrimary = null;
+    let selectedPdf = null;
     const chatWidget = document.getElementById("chatWidgetPanel");
     const chatFloatBtn = document.getElementById("chatFloatBtn");
     const chatMessagesArea = document.getElementById("chatMessagesArea");
@@ -639,9 +691,9 @@
             const srcSpan = document.createElement("div");
             srcSpan.className = "src-tag";
             if (currentLanguage === "ar") {
-                srcSpan.innerText = sourceType === "llm" ? "📚 المصدر: النصوص القانونية" : (sourceType === "contacts" ? "📋 المصدر: دليل المحامين" : "⚠️ خطأ");
+                srcSpan.innerText = sourceType === "llm" ? "📚 المصدر: النصوص القانونية" : (sourceType === "contacts" ? "📋 المصدر: دليل المحامين" : (sourceType === "greeting" ? "👋 تحية" : "⚠️ خطأ"));
             } else {
-                srcSpan.innerText = sourceType === "llm" ? "📚 Source: textes juridiques" : (sourceType === "contacts" ? "📋 Source: annuaire" : "⚠️ Erreur");
+                srcSpan.innerText = sourceType === "llm" ? "📚 Source: textes juridiques" : (sourceType === "contacts" ? "📋 Source: annuaire" : (sourceType === "greeting" ? "👋 Salutation" : "⚠️ Erreur"));
             }
             msgDiv.appendChild(srcSpan);
         }
@@ -686,7 +738,7 @@
             const response = await fetch("/api/ask", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ question: question, pdf_filename: selectedPdf })
             });
             removeThinking();
             if (!response.ok) {
@@ -743,12 +795,12 @@
                 handleContractClick("work", null);
             });
         }
-        const agencyCard = document.querySelector(".contract-card[data-contract-key='agency']");
-        if (agencyCard) {
-            agencyCard.style.cursor = "pointer";
-            agencyCard.addEventListener("click", (e) => {
+        const loanCard = document.querySelector(".contract-card[data-contract-key='loan']");
+        if (loanCard) {
+            loanCard.style.cursor = "pointer";
+            loanCard.addEventListener("click", (e) => {
                 if (e.target.classList && e.target.classList.contains("subfield-item")) return;
-                handleContractClick("agency", null);
+                handleContractClick("loan", null);
             });
         }
         // For sale & rent main card (without sub) we show info message (already handled inside handleContractClick)
@@ -759,19 +811,32 @@
         if (isChatOpen) closeChat();
         else openChat();
     });
-    closeChatBtnElem.addEventListener("click", closeChat);
+    closeChatBtnElem.addEventListener("click", () => {
+        closeChat();
+    });
     clearChatBtnElem.addEventListener("click", () => {
+        selectedPrimary = null;
+        selectedPdf = null;
         while (chatMessagesArea.firstChild) {
             chatMessagesArea.removeChild(chatMessagesArea.firstChild);
         }
-        const welcomeDiv = document.createElement("div");
-        welcomeDiv.className = "message bot-msg";
-        welcomeDiv.id = "welcomeChatMsg";
+        const initialDiv = document.createElement("div");
+        initialDiv.className = "message bot-msg";
+        initialDiv.id = "initialOptionsMsg";
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        bubble.innerText = currentLanguage === "ar" ? "✨ مرحباً! أنا المساعد القانوني التونسي. اسألني عن القوانين، العقود، أو انقر على أي عقد من القائمة لتحميل النموذج بصيغة PDF. ✨" : "✨ Bonjour ! Je suis l'assistant juridique tunisien. Posez-moi des questions ou cliquez sur un contrat pour télécharger le modèle PDF. ✨";
-        welcomeDiv.appendChild(bubble);
-        chatMessagesArea.appendChild(welcomeDiv);
+        bubble.innerHTML = `
+            <div id="initialOptions" class="options-container">
+                <button class="option-btn" data-primary="sale" data-ar="عقد البيع" data-fr="Contrat de vente">عقد البيع</button>
+                <button class="option-btn" data-primary="rent" data-ar="عقد كراء" data-fr="Contrat de location">عقد كراء</button>
+                <button class="option-btn" data-primary="work" data-ar="عقد شغل" data-fr="Contrat de travail">عقد شغل</button>
+                <button class="option-btn" data-primary="loan" data-ar="عقد قرض" data-fr="Contrat de prêt">عقد قرض</button>
+            </div>
+        `;
+        initialDiv.appendChild(bubble);
+        chatMessagesArea.appendChild(initialDiv);
+        applyLanguage(currentLanguage); // to update button texts
+        attachOptionEvents();
         scrollChatToBottom();
     });
     chatSendBtnElem.addEventListener("click", () => {
@@ -795,9 +860,77 @@
         });
     });
 
+    function attachOptionEvents() {
+        document.querySelectorAll(".option-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const primary = e.target.getAttribute("data-primary");
+                selectedPrimary = primary;
+                showSubOptions(primary);
+            });
+        });
+        document.querySelectorAll(".sub-option-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const pdf = e.target.getAttribute("data-pdf");
+                selectedPdf = pdf;
+                showQuestionInput();
+            });
+        });
+    }
+
+    function showSubOptions(primary) {
+        const subOptions = getSubOptions(primary);
+        const initialMsg = document.getElementById("initialOptionsMsg");
+        if (initialMsg) {
+            const bubble = initialMsg.querySelector(".bubble");
+            bubble.innerHTML = `
+                <div class="sub-options-container">
+                    ${subOptions.map(sub => `<button class="sub-option-btn" data-pdf="${sub.pdf}" data-ar="${sub.ar}" data-fr="${sub.fr}">${currentLanguage === "ar" ? sub.ar : sub.fr}</button>`).join('')}
+                </div>
+            `;
+            attachOptionEvents();
+        }
+    }
+
+    function showQuestionInput() {
+        const initialMsg = document.getElementById("initialOptionsMsg");
+        if (initialMsg) {
+            const bubble = initialMsg.querySelector(".bubble");
+            bubble.innerText = currentLanguage === "ar" ? "الآن يمكنك طرح سؤالك حول هذا الموضوع:" : "Vous pouvez maintenant poser votre question sur ce sujet :";
+        }
+        chatInputElem.style.display = "block";
+        chatSendBtnElem.style.display = "block";
+        chatInputElem.focus();
+    }
+
+    function getSubOptions(primary) {
+        const suffix = currentLanguage === "ar" ? "Arabe.pdf" : "Français.pdf";
+        if (primary === "sale") {
+            return [
+                { pdf: `Coc${suffix}`, ar: "سيارات", fr: "Voitures" },
+                { pdf: `Droit${suffix}`, ar: "عقارات و أراضي", fr: "Immobilier & terrains" }
+            ];
+        } else if (primary === "rent") {
+            return [
+                { pdf: `Coc${suffix}`, ar: "محل سكني", fr: "Logement" },
+                { pdf: `Commerce${suffix}`, ar: "محل تجاري", fr: "Local commercial" }
+            ];
+        } else if (primary === "work") {
+            return [
+                { pdf: `travail${suffix}`, ar: "عقد شغل", fr: "Contrat de travail" }
+            ];
+        } else if (primary === "loan") {
+            return [
+                { pdf: `Coc${suffix}`, ar: "عقد قرض", fr: "Contrat de prêt" }
+            ];
+        }
+        return [];
+    }
+
     // ---- INIT ----
     applyLanguage("ar");
     initContractEvents();
+    attachOptionEvents();
+
     closeChat(); // initially hidden
 </script>
 </body>
