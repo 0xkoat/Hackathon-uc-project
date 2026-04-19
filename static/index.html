@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>خدمات عقدية | خدمات عقود قانونية تونسية</title>
+    <title>JurisTech – Contrats juridiques tunisiens</title>
     <style>
         * {
             margin: 0;
@@ -19,6 +19,32 @@
             flex-direction: column;
             align-items: center;
             justify-content: space-between;
+            position: relative;
+        }
+
+        /* Balance watermark — centered, blends seamlessly */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(55vw, 620px);
+            height: min(55vw, 620px);
+            background-image: url('/static/balance.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.13;
+            pointer-events: none;
+            z-index: 0;
+            filter: grayscale(100%) contrast(0.45) brightness(1.1);
+            mix-blend-mode: multiply;
+        }
+
+        .main-container, .footer {
+            position: relative;
+            z-index: 1;
         }
 
         /* main container */
@@ -39,12 +65,27 @@
             margin-bottom: 2rem;
             background: rgba(255,255,255,0.7);
             backdrop-filter: blur(8px);
-            padding: 12px 24px;
+            padding: 10px 24px;
             border-radius: 60px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo-area img.site-logo {
+            height: 48px;
+            width: 48px;
+            object-fit: cover;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(26,82,118,0.18);
+            background: white;
+            padding: 0;
+            border: 2px solid rgba(26,82,118,0.15);
+        }
         .logo-area h2 {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             background: linear-gradient(135deg, #1a5276, #2c3e50);
             background-clip: text;
             -webkit-background-clip: text;
@@ -90,53 +131,58 @@
             font-size: 1rem;
         }
 
-        /* cards grid */
+        /* cards grid — column layout, right-aligned */
         .contracts-grid {
             display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 2rem;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 1.2rem;
             margin: 2rem 0 3rem;
+            padding-right: 0;
         }
         .contract-card {
             background: white;
             border-radius: 28px;
-            width: 260px;
-            padding: 1.5rem 1rem 1rem;
+            width: 280px;
+            padding: 1.2rem 1rem 1rem;
             box-shadow: 0 12px 28px rgba(0,0,0,0.08);
-            transition: all 0.25s ease;
+            transition: all 0.3s ease;
             cursor: default;
             position: relative;
             overflow: hidden;
             border: 1px solid rgba(0,0,0,0.05);
         }
+
+        /* Only the hovered card expands */
         .contract-card:hover {
-            transform: translateY(-6px);
+            transform: translateX(-4px);
             box-shadow: 0 20px 30px -12px rgba(0,0,0,0.15);
+            width: 310px;
         }
         .card-title {
-            font-size: 1.7rem;
+            font-size: 1.5rem;
             font-weight: 700;
             text-align: center;
             padding-bottom: 12px;
             border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 16px;
+            margin-bottom: 0;
             color: #1e4663;
         }
         .subfields-container {
             max-height: 0;
             opacity: 0;
             overflow: hidden;
-            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.3s ease;
             display: flex;
             flex-direction: column;
             gap: 10px;
             margin-top: 0;
         }
+        /* Only expand the subfields of the HOVERED card */
         .contract-card:hover .subfields-container {
-            max-height: 200px;   /* enough for subitems */
+            max-height: 220px;
             opacity: 1;
-            margin-top: 12px;
+            margin-top: 14px;
         }
         .subfield-item {
             background: #f8fafc;
@@ -183,8 +229,8 @@
             position: fixed;
             bottom: 28px;
             right: 28px;
-            width: 64px;
-            height: 64px;
+            width: 68px;
+            height: 68px;
             background: linear-gradient(145deg, #1a5276, #0e3a54);
             border-radius: 50%;
             display: flex;
@@ -195,21 +241,60 @@
             transition: transform 0.2s, background 0.2s;
             z-index: 1000;
             border: none;
-            color: white;
-            font-size: 32px;
+            overflow: hidden;
+            padding: 0;
+        }
+        .chat-float-btn img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            display: block;
         }
         .chat-float-btn:hover {
             transform: scale(1.06);
             background: linear-gradient(145deg, #236b97, #124f6e);
         }
 
-        /* chat widget panel */
+        /* Tooltip bubble on the float button */
+        .chat-float-tooltip {
+            position: fixed;
+            bottom: 104px;
+            right: 28px;
+            background: #1a5276;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 20px 20px 4px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+            z-index: 999;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        .chat-float-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -7px;
+            right: 22px;
+            border-left: 7px solid transparent;
+            border-right: 0px solid transparent;
+            border-top: 7px solid #1a5276;
+        }
+        .chat-float-tooltip.hidden-tooltip {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* chat widget panel — bigger, 72% width */
         .chat-widget-panel {
             position: fixed;
-            bottom: 100px;
+            bottom: 110px;
             right: 28px;
-            width: 380px;
-            height: 560px;
+            width: min(72vw, 860px);
+            height: min(78vh, 700px);
             background: white;
             border-radius: 28px;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
@@ -222,19 +307,29 @@
             border: 1px solid rgba(0,0,0,0.1);
         }
         .chat-header-widget {
-            background: #1a5276;
+            background: linear-gradient(135deg, #1a5276, #0e3a54);
             color: white;
-            padding: 16px 18px;
+            padding: 14px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-weight: 600;
             font-size: 1rem;
+            gap: 10px;
         }
-        .chat-header-widget span:first-child {
+        .chat-header-left {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+        }
+        .chat-header-logo {
+            width: 38px;
+            height: 38px;
+            object-fit: cover;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.9);
+            padding: 0;
+            border: 2px solid rgba(255,255,255,0.4);
         }
         .close-chat {
             background: none;
@@ -251,7 +346,7 @@
         .chat-messages-area {
             flex: 1;
             overflow-y: auto;
-            padding: 16px 12px;
+            padding: 18px 16px;
             background: #f9fafc;
             display: flex;
             flex-direction: column;
@@ -260,7 +355,7 @@
         .message {
             display: flex;
             flex-direction: column;
-            max-width: 85%;
+            max-width: 82%;
         }
         .user-msg {
             align-self: flex-end;
@@ -269,10 +364,10 @@
             align-self: flex-start;
         }
         .bubble {
-            padding: 10px 14px;
+            padding: 12px 16px;
             border-radius: 22px;
-            font-size: 13px;
-            line-height: 1.45;
+            font-size: 14px;
+            line-height: 1.5;
             word-break: break-word;
             white-space: pre-wrap;
         }
@@ -297,17 +392,17 @@
         }
         .chat-input-area {
             display: flex;
-            padding: 12px;
+            padding: 14px;
             background: white;
             border-top: 1px solid #e2e8f0;
-            gap: 8px;
+            gap: 10px;
         }
         .chat-input {
             flex: 1;
             border: 1px solid #cbd5e1;
             border-radius: 40px;
-            padding: 10px 16px;
-            font-size: 13px;
+            padding: 12px 18px;
+            font-size: 14px;
             resize: none;
             font-family: inherit;
             outline: none;
@@ -321,11 +416,15 @@
             background: #1a5276;
             border: none;
             border-radius: 40px;
-            padding: 0 18px;
+            padding: 0 22px;
             color: white;
             font-weight: bold;
             cursor: pointer;
             transition: 0.2s;
+            font-size: 14px;
+        }
+        .chat-send:hover:not(:disabled) {
+            background: #236b97;
         }
         .chat-send:disabled {
             background: #9aaebf;
@@ -352,18 +451,23 @@
         /* responsiveness */
         @media (max-width: 680px) {
             .chat-widget-panel {
-                width: 90vw;
-                right: 5vw;
-                bottom: 85px;
-                height: 65vh;
+                width: 93vw;
+                right: 3.5vw;
+                bottom: 90px;
+                height: 70vh;
             }
             .contract-card {
-                width: 220px;
+                width: 240px;
+            }
+            .contracts-grid {
+                align-items: center;
             }
             .card-title {
                 font-size: 1.3rem;
             }
         }
+
+        /* ---- Option buttons: stay visible, highlight on selection ---- */
         .options-container {
             display: flex;
             flex-direction: column;
@@ -371,33 +475,51 @@
         }
         .option-btn {
             background: #e1f0fa;
-            border: 1px solid #1a5276;
-            padding: 8px 12px;
+            border: 1.5px solid #1a5276;
+            padding: 10px 14px;
             border-radius: 20px;
             cursor: pointer;
             font-size: 14px;
-            transition: background 0.2s;
+            transition: background 0.2s, border-color 0.2s, transform 0.1s;
+            text-align: right;
+            font-family: inherit;
         }
         .option-btn:hover {
             background: #c8e4f7;
+            transform: scale(1.01);
+        }
+        .option-btn.selected {
+            background: #1a5276;
+            color: white;
+            border-color: #1a5276;
+            font-weight: 700;
         }
         .sub-options-container {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
             margin-top: 10px;
         }
         .sub-option-btn {
             background: #f0f8e1;
-            border: 1px solid #2c5f2d;
-            padding: 6px 10px;
+            border: 1.5px solid #2c5f2d;
+            padding: 9px 12px;
             border-radius: 15px;
             cursor: pointer;
             font-size: 13px;
-            transition: background 0.2s;
+            transition: background 0.2s, transform 0.1s;
+            font-family: inherit;
+            text-align: right;
         }
         .sub-option-btn:hover {
             background: #e8f5d8;
+            transform: scale(1.01);
+        }
+        .sub-option-btn.selected {
+            background: #2c5f2d;
+            color: white;
+            border-color: #2c5f2d;
+            font-weight: 700;
         }
         .pointer {
             cursor: pointer;
@@ -412,7 +534,8 @@
 <div class="main-container">
     <div class="top-bar">
         <div class="logo-area">
-            <h2>📄 خدمات عقدية | Services Contractuels</h2>
+            <img src="/static/logo.png" alt="Logo" class="site-logo" onerror="this.style.display='none'">
+            <h2>JurisTech</h2>
         </div>
         <div class="lang-switch">
             <button class="lang-btn active" data-lang="ar">🇹🇳 العربية</button>
@@ -469,15 +592,21 @@
     </div>
 </div>
 
+<!-- Tooltip above floating button -->
+<div class="chat-float-tooltip" id="chatFloatTooltip">شاورني!</div>
+
 <!-- Floating Chat Button -->
-<div class="chat-float-btn" id="chatFloatBtn">
-    💬
-</div>
+<button class="chat-float-btn" id="chatFloatBtn" aria-label="فتح المحادثة">
+    <img src="/static/logo.png" alt="Chat" onerror="this.outerHTML='💬'">
+</button>
 
 <!-- Chat Widget Panel (initially hidden) -->
 <div id="chatWidgetPanel" class="chat-widget-panel hidden">
     <div class="chat-header-widget">
-        <span>🏛️ <span id="chatHeaderText" data-ar="المساعد القانوني الذكي" data-fr="Assistant juridique IA">المساعد القانوني الذكي</span></span>
+        <div class="chat-header-left">
+            <img src="/static/logo.png" alt="Logo" class="chat-header-logo" onerror="this.style.display='none'">
+            <span id="chatHeaderText" data-ar="المساعد القانوني الذكي" data-fr="Assistant juridique IA">المساعد القانوني الذكي</span>
+        </div>
         <div>
             <button class="clear-chat-btn" id="clearChatBtn" title="مسح المحادثة">🗑️</button>
             <button class="close-chat" id="closeChatBtn">✕</button>
@@ -509,24 +638,16 @@
     function getPdfFileName(category) {
         const suffix = currentLanguage === "ar" ? "Arabe.pdf" : "Français.pdf";
         switch(category) {
-            case "cars":        // سيارات
-                return `/laws/Coc${suffix}`;
-            case "realestate":  // عقارات و أراضي
-                return `/laws/Droit${suffix}`;
-            case "housing":     // محل سكني
-                return `/laws/Coc${suffix}`;
-            case "commercial":  // محل تجاري
-                return `/laws/Commerce${suffix}`;
-            case "work":        // عقد شغل
-                return `/laws/travail${suffix}`;
-            case "loan":        // عقد قرض
-                return `/laws/Coc${suffix}`;
-            default:
-                return null;
+            case "cars":        return `/laws/Coc${suffix}`;
+            case "realestate":  return `/laws/Droit${suffix}`;
+            case "housing":     return `/laws/Coc${suffix}`;
+            case "commercial":  return `/laws/Commerce${suffix}`;
+            case "work":        return `/laws/travail${suffix}`;
+            case "loan":        return `/laws/Coc${suffix}`;
+            default:            return null;
         }
     }
 
-    // open PDF in new tab (or download depending on browser settings)
     function openPDF(pdfPath) {
         if (!pdfPath) {
             alert(currentLanguage === "ar" ? "ملف PDF غير متوفر لهذا العنصر." : "Fichier PDF non disponible pour cet élément.");
@@ -535,34 +656,25 @@
         window.open(pdfPath, '_blank');
     }
 
-    // handle click on a contract element (subfield or main card for work/agency)
     function handleContractClick(contractKey, subKey = null) {
         let category = null;
-        // determine PDF category based on contractKey + subKey
         if (contractKey === "sale") {
             if (subKey === "cars") category = "cars";
             else if (subKey === "realestate") category = "realestate";
-        } 
-        else if (contractKey === "rent") {
+        } else if (contractKey === "rent") {
             if (subKey === "commercial") category = "commercial";
             else if (subKey === "housing") category = "housing";
-        }
-        else if (contractKey === "work") {
+        } else if (contractKey === "work") {
             category = "work";
-        }
-        else if (contractKey === "loan") {
+        } else if (contractKey === "loan") {
             category = "loan";
         }
 
         if (category) {
             const pdfFile = getPdfFileName(category);
-            if (pdfFile) {
-                openPDF(pdfFile);
-            } else {
-                alert(currentLanguage === "ar" ? "عذراً، لم يتم العثور على الوثيقة." : "Désolé, document introuvable.");
-            }
+            if (pdfFile) openPDF(pdfFile);
+            else alert(currentLanguage === "ar" ? "عذراً، لم يتم العثور على الوثيقة." : "Désolé, document introuvable.");
         } else {
-            // no PDF mapped (e.g., main card of sale/rent without sub) -> optional message
             if (currentLanguage === "ar")
                 alert("الرجاء اختيار فرع محدد من العقد لعرض الوثيقة المناسبة.");
             else
@@ -573,32 +685,26 @@
     // ----- LANGUAGE UI UPDATE -----
     function applyLanguage(lang) {
         currentLanguage = lang;
-        // update all elements with data-ar / data-fr
         document.querySelectorAll("[data-ar][data-fr]").forEach(el => {
             const text = lang === "ar" ? el.getAttribute("data-ar") : el.getAttribute("data-fr");
             if (text) el.innerText = text;
         });
-        // contract cards titles (inner card-title dynamic)
         document.querySelectorAll(".card-title").forEach(title => {
             const arText = title.getAttribute("data-ar");
             const frText = title.getAttribute("data-fr");
-            if (arText && frText) {
-                title.innerText = lang === "ar" ? arText : frText;
-            }
+            if (arText && frText) title.innerText = lang === "ar" ? arText : frText;
         });
-        // subfields items
         document.querySelectorAll(".subfield-item").forEach(item => {
             const arSub = item.getAttribute("data-ar");
             const frSub = item.getAttribute("data-fr");
             if (arSub && frSub) item.innerText = lang === "ar" ? arSub : frSub;
         });
-        // no-sub placeholders
         document.querySelectorAll(".no-sub").forEach(no => {
             const arNo = no.getAttribute("data-ar");
             const frNo = no.getAttribute("data-fr");
             if (arNo && frNo) no.innerText = lang === "ar" ? arNo : frNo;
         });
-        // hero texts
+
         const mainTitle = document.getElementById("mainTitle");
         const subTitle = document.getElementById("subTitle");
         if (lang === "ar") {
@@ -608,20 +714,22 @@
             mainTitle.innerText = "Services contractuels – Contrats certifiés selon la loi tunisienne";
             subTitle.innerText = "Choisissez le contrat adapté ou interrogez l'assistant, et téléchargez le modèle PDF";
         }
-        // chat header text
+
         const chatHeaderSpan = document.getElementById("chatHeaderText");
         if (chatHeaderSpan) {
             chatHeaderSpan.innerText = lang === "ar" ? "المساعد القانوني الذكي" : "Assistant juridique IA";
         }
         const chatInput = document.getElementById("chatInput");
         const sendBtn = document.getElementById("chatSendBtn");
-        if (chatInput) {
-            chatInput.placeholder = lang === "ar" ? "اكتب سؤالك هنا..." : "Écrivez votre question...";
+        if (chatInput) chatInput.placeholder = lang === "ar" ? "اكتب سؤالك هنا..." : "Écrivez votre question...";
+        if (sendBtn) sendBtn.innerText = lang === "ar" ? "إرسال" : "Envoyer";
+
+        // Update tooltip text
+        const tooltip = document.getElementById("chatFloatTooltip");
+        if (tooltip && !isChatOpen) {
+            tooltip.innerText = lang === "ar" ? "!شاورني" : "Posez-moi une question !";
         }
-        if (sendBtn) {
-            sendBtn.innerText = lang === "ar" ? "إرسال" : "Envoyer";
-        }
-        // update initial options if present
+
         const initialOptions = document.getElementById("initialOptions");
         if (initialOptions) {
             document.querySelectorAll(".option-btn").forEach(btn => {
@@ -635,19 +743,21 @@
                 if (arSub && frSub) btn.innerText = lang === "ar" ? arSub : frSub;
             });
         }
-        // copyright
+
         const copyrightDiv = document.getElementById("copyrightText");
         if (copyrightDiv) {
-            copyrightDiv.innerText = lang === "ar" ? "جميع الحقوق محفوظة © 2026 – خدمات عقدية. تطوير متخصص في العقود التونسية." : "Tous droits réservés © 2026 – Services Contractuels. Développement spécialisé.";
+            copyrightDiv.innerText = lang === "ar"
+                ? "جميع الحقوق محفوظة © 2026 – خدمات عقدية. تطوير متخصص في العقود التونسية."
+                : "Tous droits réservés © 2026 – Services Contractuels. Développement spécialisé.";
         }
-        // active class on language buttons
+
         document.querySelectorAll(".lang-btn").forEach(btn => {
             if (btn.getAttribute("data-lang") === lang) btn.classList.add("active");
             else btn.classList.remove("active");
         });
     }
 
-    // ----- CHAT FUNCTIONALITY (same as before, connected to backend) -----
+    // ----- CHAT FUNCTIONALITY -----
     let isChatOpen = false;
     let selectedPrimary = null;
     let selectedPdf = null;
@@ -658,15 +768,18 @@
     const chatSendBtnElem = document.getElementById("chatSendBtn");
     const closeChatBtnElem = document.getElementById("closeChatBtn");
     const clearChatBtnElem = document.getElementById("clearChatBtn");
+    const chatTooltip = document.getElementById("chatFloatTooltip");
 
     function openChat() {
         chatWidget.classList.remove("hidden");
+        chatTooltip.classList.add("hidden-tooltip");
         isChatOpen = true;
         chatInputElem.focus();
         scrollChatToBottom();
     }
     function closeChat() {
         chatWidget.classList.add("hidden");
+        chatTooltip.classList.remove("hidden-tooltip");
         isChatOpen = false;
     }
     function scrollChatToBottom() {
@@ -766,7 +879,6 @@
 
     // ----- ATTACH EVENTS FOR CONTRACT CARDS (PDF opening) -----
     function initContractEvents() {
-        // For subfields (cars, realestate, commercial, housing)
         document.querySelectorAll(".subfield-item").forEach(sub => {
             sub.addEventListener("click", (e) => {
                 e.stopPropagation();
@@ -774,7 +886,6 @@
                 if (!card) return;
                 const contractKey = card.getAttribute("data-contract-key");
                 let subKey = sub.getAttribute("data-sub-key");
-                // fallback detection if data-sub-key not present (we set it in html)
                 if (!subKey) {
                     const text = sub.innerText;
                     if (text.includes("سيارات") || text.includes("Voitures")) subKey = "cars";
@@ -786,7 +897,6 @@
             });
         });
 
-        // For cards that have no subfields but direct PDF (work & agency)
         const workCard = document.querySelector(".contract-card[data-contract-key='work']");
         if (workCard) {
             workCard.style.cursor = "pointer";
@@ -803,7 +913,6 @@
                 handleContractClick("loan", null);
             });
         }
-        // For sale & rent main card (without sub) we show info message (already handled inside handleContractClick)
     }
 
     // ---- Chat UI events ----
@@ -811,9 +920,8 @@
         if (isChatOpen) closeChat();
         else openChat();
     });
-    closeChatBtnElem.addEventListener("click", () => {
-        closeChat();
-    });
+    closeChatBtnElem.addEventListener("click", () => closeChat());
+
     clearChatBtnElem.addEventListener("click", () => {
         selectedPrimary = null;
         selectedPdf = null;
@@ -835,10 +943,13 @@
         `;
         initialDiv.appendChild(bubble);
         chatMessagesArea.appendChild(initialDiv);
-        applyLanguage(currentLanguage); // to update button texts
+        chatInputElem.style.display = "none";
+        chatSendBtnElem.style.display = "none";
+        applyLanguage(currentLanguage);
         attachOptionEvents();
         scrollChatToBottom();
     });
+
     chatSendBtnElem.addEventListener("click", () => {
         const q = chatInputElem.value.trim();
         if (q) sendQuestionToAPI(q);
@@ -855,21 +966,29 @@
     document.querySelectorAll(".lang-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const lang = btn.getAttribute("data-lang");
-            if (lang === "ar") applyLanguage("ar");
-            else applyLanguage("fr");
+            applyLanguage(lang === "ar" ? "ar" : "fr");
         });
     });
 
+    // ---- Option buttons: stay visible, highlight selected ----
     function attachOptionEvents() {
         document.querySelectorAll(".option-btn").forEach(btn => {
             btn.addEventListener("click", (e) => {
+                // Highlight selected primary option — keep all buttons
+                document.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
+                e.target.classList.add("selected");
+
                 const primary = e.target.getAttribute("data-primary");
                 selectedPrimary = primary;
-                showSubOptions(primary);
+                showSubOptions(primary, e.target);
             });
         });
         document.querySelectorAll(".sub-option-btn").forEach(btn => {
             btn.addEventListener("click", (e) => {
+                // Highlight selected sub option — keep all sub buttons
+                document.querySelectorAll(".sub-option-btn").forEach(b => b.classList.remove("selected"));
+                e.target.classList.add("selected");
+
                 const pdf = e.target.getAttribute("data-pdf");
                 selectedPdf = pdf;
                 showQuestionInput();
@@ -877,50 +996,77 @@
         });
     }
 
-    function showSubOptions(primary) {
+    function showSubOptions(primary, clickedBtn) {
         const subOptions = getSubOptions(primary);
-        const initialMsg = document.getElementById("initialOptionsMsg");
-        if (initialMsg) {
-            const bubble = initialMsg.querySelector(".bubble");
-            bubble.innerHTML = `
-                <div class="sub-options-container">
-                    ${subOptions.map(sub => `<button class="sub-option-btn" data-pdf="${sub.pdf}" data-ar="${sub.ar}" data-fr="${sub.fr}">${currentLanguage === "ar" ? sub.ar : sub.fr}</button>`).join('')}
-                </div>
-            `;
-            attachOptionEvents();
+
+        // Remove any existing sub-options container appended after the bubble
+        const existingSubContainer = document.getElementById("subOptionsAppended");
+        if (existingSubContainer) existingSubContainer.remove();
+
+        if (subOptions.length === 0) {
+            // For work/loan with a single option, jump straight to question input
+            selectedPdf = getSubOptions(primary)[0]?.pdf || null;
+            showQuestionInput();
+            return;
         }
+
+        // Append sub-options as a new bot message below, preserving the primary options
+        const subDiv = document.createElement("div");
+        subDiv.className = "message bot-msg";
+        subDiv.id = "subOptionsAppended";
+        const subBubble = document.createElement("div");
+        subBubble.className = "bubble";
+        subBubble.innerHTML = `
+            <div class="sub-options-container">
+                ${subOptions.map(sub => `<button class="sub-option-btn" data-pdf="${sub.pdf}" data-ar="${sub.ar}" data-fr="${sub.fr}">${currentLanguage === "ar" ? sub.ar : sub.fr}</button>`).join('')}
+            </div>
+        `;
+        subDiv.appendChild(subBubble);
+        chatMessagesArea.appendChild(subDiv);
+        scrollChatToBottom();
+        attachOptionEvents();
     }
 
     function showQuestionInput() {
-        const initialMsg = document.getElementById("initialOptionsMsg");
-        if (initialMsg) {
-            const bubble = initialMsg.querySelector(".bubble");
-            bubble.innerText = currentLanguage === "ar" ? "الآن يمكنك طرح سؤالك حول هذا الموضوع:" : "Vous pouvez maintenant poser votre question sur ce sujet :";
-        }
         chatInputElem.style.display = "block";
         chatSendBtnElem.style.display = "block";
         chatInputElem.focus();
+        // Append confirmation message
+        const existingConfirm = document.getElementById("confirmMsg");
+        if (!existingConfirm) {
+            const confirmDiv = document.createElement("div");
+            confirmDiv.className = "message bot-msg";
+            confirmDiv.id = "confirmMsg";
+            const confirmBubble = document.createElement("div");
+            confirmBubble.className = "bubble";
+            confirmBubble.innerText = currentLanguage === "ar"
+                ? "✅ الآن يمكنك طرح سؤالك حول هذا الموضوع:"
+                : "✅ Vous pouvez maintenant poser votre question sur ce sujet :";
+            confirmDiv.appendChild(confirmBubble);
+            chatMessagesArea.appendChild(confirmDiv);
+            scrollChatToBottom();
+        }
     }
 
     function getSubOptions(primary) {
         const suffix = currentLanguage === "ar" ? "Arabe.pdf" : "Français.pdf";
         if (primary === "sale") {
             return [
-                { pdf: `Coc${suffix}`, ar: "سيارات", fr: "Voitures" },
-                { pdf: `Droit${suffix}`, ar: "عقارات و أراضي", fr: "Immobilier & terrains" }
+                { pdf: `Coc${suffix}`, ar: "🚗 سيارات", fr: "🚗 Voitures" },
+                { pdf: `Droit${suffix}`, ar: "🏠 عقارات و أراضي", fr: "🏠 Immobilier & terrains" }
             ];
         } else if (primary === "rent") {
             return [
-                { pdf: `Coc${suffix}`, ar: "محل سكني", fr: "Logement" },
-                { pdf: `Commerce${suffix}`, ar: "محل تجاري", fr: "Local commercial" }
+                { pdf: `Coc${suffix}`, ar: "🏠 محل سكني", fr: "🏠 Logement" },
+                { pdf: `Commerce${suffix}`, ar: "🏪 محل تجاري", fr: "🏪 Local commercial" }
             ];
         } else if (primary === "work") {
             return [
-                { pdf: `travail${suffix}`, ar: "عقد شغل", fr: "Contrat de travail" }
+                { pdf: `travail${suffix}`, ar: "💼 عقد شغل", fr: "💼 Contrat de travail" }
             ];
         } else if (primary === "loan") {
             return [
-                { pdf: `Coc${suffix}`, ar: "عقد قرض", fr: "Contrat de prêt" }
+                { pdf: `Coc${suffix}`, ar: "💰 عقد قرض", fr: "💰 Contrat de prêt" }
             ];
         }
         return [];
@@ -930,8 +1076,7 @@
     applyLanguage("ar");
     initContractEvents();
     attachOptionEvents();
-
-    closeChat(); // initially hidden
+    closeChat(); // initially hidden (tooltip shown)
 </script>
 </body>
 </html>

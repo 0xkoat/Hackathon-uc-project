@@ -36,7 +36,7 @@ CHROMA_DB_PATH = "./chroma_db/"
 CONTACTS_CSV   = "./law_contacts.csv"
 EMBED_MODEL    = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
-HF_API_KEY = "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"
+HF_API_KEY = "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"
 
 # Each entry is (provider, model)
 # novita and featherless-ai are free and don't require model-specific agreements
