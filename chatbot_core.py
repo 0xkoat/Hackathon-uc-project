@@ -178,7 +178,7 @@ def _ensure_contacts_csv():
         print("[CSV] Contacts file created.")
 
 
-def _find_contacts(question: str, lang: str) -> str:
+def _find_contacts(question: str, lang: str, raw: bool = False) -> str:
     try:
         df = pd.read_csv(CONTACTS_CSV, encoding="utf-8-sig")
     except Exception as e:
@@ -204,11 +204,29 @@ def _find_contacts(question: str, lang: str) -> str:
 
     contacts = "\n\n".join(matched.apply(fmt, axis=1).tolist())
 
+    # raw=True → return only the contact cards, no intro text
+    if raw:
+        return contacts
+
     if lang == "ar":
-        return "لم نجد إجابة في النصوص القانونية.\nإليك متخصصون يمكنهم مساعدتك:\n\n" + contacts
+        return (
+            "لم نتمكن من العثور على إجابة دقيقة في النصوص القانونية المتاحة.\n"
+            "لكن يسعدنا ربطك بمتخصصين قانونيين معتمدين يمكنهم مساعدتك مباشرة:\n\n"
+            + contacts +
+            "\n\n📞 تواصل معهم مباشرة للحصول على استشارة قانونية متخصصة."
+        )
     if lang == "fr":
-        return "Réponse introuvable dans les textes juridiques.\nVoici des professionnels qui peuvent vous aider :\n\n" + contacts
-    return "لم نجد إجابة.\n\n" + contacts
+        return (
+            "Nous n'avons pas trouvé de réponse précise dans les textes juridiques disponibles.\n"
+            "Nous vous mettons en contact avec des professionnels juridiques accrédités :\n\n"
+            + contacts +
+            "\n\n📞 Contactez-les directement pour une consultation juridique personnalisée."
+        )
+    return (
+        "لم نجد إجابة في النصوص المتاحة.\n\n"
+        + contacts +
+        "\n\n📞 تواصل مع هؤلاء المتخصصين للمساعدة."
+    )
 
 # =============================================================================
 # PROMPT MESSAGES
@@ -287,15 +305,16 @@ def _call_llm(messages: list) -> str:
 # PUBLIC ask()
 # =============================================================================
 
+
 def ask(question: str, pdf_filename: str = None) -> dict:
     if vectorstore is None:
-        return {"answer": "⚠️ Aucun PDF indexé. Ajoutez vos PDFs dans ./laws/ et redémarrez.",
+        return {"answer": "Aucun PDF indexe. Ajoutez vos PDFs dans ./laws/ et redemarrez.",
                 "lang": "fr", "source": "error"}
 
     lang = detect_language(question)
 
-    # Greeting shortcut
-    greeting_kw = ["hello", "hi", "مرحبا", "bonjour", "salut", "اهلا", "صباح", "مساء"]
+    greeting_kw = ["hello", "hi", "bonjour", "salut", "ahlan",
+                   "مرحبا", "اهلا", "صباح", "مساء"]
     if any(kw in question.lower() for kw in greeting_kw) and len(question.split()) <= 4:
         if lang == "ar":
             return {"answer": "مرحباً! أنا المساعد القانوني التونسي. اختر نوع العقد أولاً ثم اسأل سؤالك.", "lang": lang, "source": "greeting"}
@@ -305,7 +324,6 @@ def ask(question: str, pdf_filename: str = None) -> dict:
     try:
         all_results = vectorstore.similarity_search_with_relevance_scores(question, k=TOP_K_CHUNKS * 2)
         print(f"[DEBUG] Total results: {len(all_results)}")
-
         if pdf_filename:
             results = [(d, s) for d, s in all_results if d.metadata.get("source") == pdf_filename]
             print(f"[DEBUG] Filtered to {pdf_filename}: {len(results)} results")
@@ -314,9 +332,8 @@ def ask(question: str, pdf_filename: str = None) -> dict:
                 print("[DEBUG] Falling back to global results")
         else:
             results = all_results[:TOP_K_CHUNKS]
-
     except Exception as e:
-        return {"answer": f"⚠️ Erreur de recherche: {e}", "lang": lang, "source": "error"}
+        return {"answer": f"Erreur de recherche: {e}", "lang": lang, "source": "error"}
 
     if not results:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
@@ -327,7 +344,6 @@ def ask(question: str, pdf_filename: str = None) -> dict:
     if best_score < MIN_RELEVANCE:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
 
-    # Build context
     context = "\n\n---\n\n".join(
         f"[{d.metadata.get('source','?')}, page {d.metadata.get('page','?')}]\n{d.page_content}"
         for d, _ in results[:TOP_K_CHUNKS]
@@ -338,5 +354,93 @@ def ask(question: str, pdf_filename: str = None) -> dict:
 
     if not response:
         return {"answer": _find_contacts(question, lang), "lang": lang, "source": "contacts"}
+
+    # ----------------------------------------------------------------
+    # Detect LLM "I don't know" responses and redirect to contacts.
+    # Strip ALL accents and normalize apostrophes before matching.
+    # ----------------------------------------------------------------
+    def _norm(text):
+        import unicodedata as _ud
+        t = text.lower()
+        # unify all apostrophe variants to straight quote
+        for ch in ["\u2019", "\u2018", "\u02bc", "\u0060", "\u00b4"]:
+            t = t.replace(ch, "'")
+        # strip accents: e.g. e + combining acute -> e
+        t = "".join(c for c in _ud.normalize("NFD", t) if _ud.category(c) != "Mn")
+        return t
+
+    r = _norm(response)
+
+    no_answer_signals = [
+        # French (all accent-free after _norm)
+        "je n'ai pas trouve",
+        "j'ai pas trouve",
+        "pas trouve",
+        "n'ai pas trouve",
+        "introuvable",
+        "ne figure pas",
+        "aucune information",
+        "n'est pas mentionne",
+        "pas dans les textes",
+        "ne mentionne pas",
+        "je ne trouve pas",
+        "aucune reponse",
+        "aucune mention",
+        "ne contient pas",
+        "je suis desole",
+        "ne specifi",
+        "ne precise pas",
+        "ne prevoit pas",
+        "pourrait-vous fournir",
+        "fournir plus de contexte",
+        "preciser le type",
+        "semblent traiter",
+        "sujets differents",
+        "ne correspond pas",
+        "ne traite pas",
+        "ne parle pas",
+        # Arabic
+        "لم أجد",
+        "لا توجد",
+        "غير موجود",
+        "لم يرد",
+        "لم أتمكن",
+        "لم نجد",
+        "لا أعرف",
+        "لا يمكنني",
+        # English
+        "not found",
+        "no information",
+        "cannot find",
+        "not mentioned",
+        "i could not find",
+        "i do not have",
+        "i was unable",
+        "no specific",
+        "could you provide",
+        "could you clarify",
+    ]
+
+    llm_no_answer = any(sig in r for sig in no_answer_signals)
+
+    if llm_no_answer:
+        contacts_block = _find_contacts(question, lang, raw=True)
+        if lang == "ar":
+            return {
+                "answer": (
+                    "لم نتمكن من العثور على إجابة في النصوص القانونية المتاحة.\n"
+                    "يسعدنا ربطك بمتخصصين قانونيين معتمدين يمكنهم مساعدتك مباشرة:\n\n"
+                    + contacts_block
+                ),
+                "lang": lang, "source": "contacts"
+            }
+        return {
+            "answer": (
+                "Nous n'avons pas trouve de reponse precise dans les textes juridiques disponibles.\n"
+                "Voici des professionnels juridiques accrédités qui peuvent vous aider :\n\n"
+                + contacts_block
+            ),
+            "lang": lang, "source": "contacts"
+        }
 
     return {"answer": response, "lang": lang, "source": "llm"}
